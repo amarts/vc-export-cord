@@ -2,6 +2,11 @@
     "compilerOptions": {
         "baseUrl": "./src",
         "sourceMap": true
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "strict": true,
+    "esModuleInterop": true
     },
     "extends": "./tsconfig.build.json",
     "include": ["src/*.ts"],

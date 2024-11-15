@@ -1,20 +1,15 @@
-//import { suites } from 'jsonld-signatures';
-//import { Ed25519KeyPair } from '@transmute/ed25519-key-pair';
-//import { driver as keyDriver } from '@digitalbazaar/did-method-key';
-
 import { mnemonicToMiniSecret } from '@polkadot/util-crypto';
 import { getPublicKey, sign, etc } from '@noble/ed25519';
 import { encode } from 'multibase';
 import { sha512 } from '@noble/hashes/sha512';
-//import { EcdsaSecp256k1Signature2019 } from 'ecdsa-secp256k1-signature-2019';
 import * as secp from '@noble/secp256k1';
 import * as jsonld from 'jsonld'; // For canonicalizing JSON-LD data
 import { sha256 } from '@noble/hashes/sha256';
 import { SignJWT, CompactSign } from 'jose';
+//import { encode as base58Encode } from 'base58-universal';
+import base58 from 'bs58'
 
-// Example mnemonic
 const mnemonic = 'test walk nut penalty hip pave soap entry language right filter choice';
-//const mnemonic = 'test walk nut penalty hip pave soap entry language left filter choice';
 
 const vcTemplate = {
     "@context": [
@@ -28,7 +23,8 @@ const vcTemplate = {
 etc.sha512Sync = (...args) => sha512(...args);
 
 async function privateKeyToJWK(privateKey: Uint8Array) {
-    const publicKey = secp.getPublicKey(privateKey, false); // Compressed public key
+    const publicKey = secp.getPublicKey(privateKey, false);
+    
     return {
         kty: 'EC',
         crv: 'secp256k1',
@@ -54,12 +50,26 @@ async function signVC2(vc: any, privateKey: Uint8Array, verificationMethod: stri
 
     const jwk = await privateKeyToJWK(privateKey);
     console.log(jwk);
-    
+
     const jws1 = await new SignJWT({})
         .setProtectedHeader(protectedHeader)
         .sign(jwk);
    console.log(jws1);
 
+/*
+    // Create the JWS with CompactSign
+    const jws = await new CompactSign(new Uint8Array(""))
+        .setProtectedHeader(protectedHeader)
+        .sign({
+            sign: async (data: Uint8Array) => {
+                // Use noble-secp256k1 to sign the data
+                const signature = await secp.signAsync(data, privateKey);
+                return signature;
+            },
+            key: null, // No need for a KeyObject
+        });
+   console.log(jws);
+*/	
     // Step 4: Construct the proof
     const proof = {
         type: 'EcdsaSecp256k1Signature2019',
@@ -180,29 +190,26 @@ async function signVC1(vc: any, verificationMethod: any, privateKey: any) {
 
 async function generateVC() {
     let vc = { ...vcTemplate };
-    let newSchemaContent = require('../demo/src/schema.json');
-    let content = {
-            name: 'Alice',
-            age: 29,
-            id: '123456789987654321',
-            country: 'India',
-            address: {
-                street: 'a',
-                pin: 54032,
-                location: {
-                    state: 'karnataka',
-                },
-            },
-    };
-    //   const { didDocument, verificationMethod } = await generateDidKey();
-    //const { did, verificationMethod, privateKey } = await generateDidAndVerificationMethod(mnemonic);
     const seed = mnemonicToMiniSecret(mnemonic);
     const privateKey = seed.slice(0, 32); // Use the first 32 bytes for the private key
     const publicKey = secp.getPublicKey(privateKey, true);
+    const multicodecPrefixedKey = new Uint8Array([0xe7, 0x01, ...publicKey]);
 
-    const encodedPublicKey = encode('base58btc', publicKey)
-    let t = new TextDecoder().decode(encodedPublicKey);
-    const verificationMethod = `did:key:${t}#${t}`;    
+    const unitArray = new Uint8Array(2 + publicKey.length)
+    unitArray[0] = 0xe7
+    unitArray[1] = 0x01
+    unitArray.set(publicKey, 2)
+
+    const buffer = Buffer.from(unitArray)
+
+    let key =  `z${base58.encode(buffer)}`
+    console.log('Key: ', key);
+    // Step 3: Base58btc encode the multicodec-prefixed key
+    const encodedKey = base58.encode(multicodecPrefixedKey);
+    console.log("key: ", encodedKey);
+    //const encodedPublicKey = encode('base58btc', multicodecPrefixedKey)
+    //let encodedKey = new TextDecoder().decode(encodedPublicKey);
+    const verificationMethod = `did:key:z${encodedKey}#z${encodedKey}`;    
 
     vc.issuanceDate = new Date().toISOString();
     vc.holder = {
@@ -213,12 +220,12 @@ async function generateVC() {
     vc.credentialSubject = { "email": "amar@dhiway.com"};
     // vc.credentialSchema = { ...newSchemaContent }
     //vc.issuer = didDocument.id;
-    vc.issuer = `did:key:${t}`;
+    vc.issuer = `did:key:z${encodedKey}`;
     
     //const signedVC = await signVC(vc, verificationMethod);
     //const signedVC = await signVC1(vc, verificationMethod, privateKey);    
     const signedVC = await signVC2(vc, privateKey, verificationMethod);    
-    console.log("SignedVC: ", signedVC);
+    console.log("SignedVC: ", signedVC, '\n', JSON.stringify(signedVC));
 }
 
 async function main() {
