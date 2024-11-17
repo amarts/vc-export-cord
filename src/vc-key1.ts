@@ -5,13 +5,47 @@ import { sha256 } from '@noble/hashes/sha256';
 import base58 from 'bs58'
 import { Secp256k1Key, Secp256k1Signature } from '@affinidi/tiny-lds-ecdsa-secp256k1-2019';
 import * as jsigs from 'jsonld-signatures';
+import {v4 as uuidv4} from 'uuid';
 
 const mnemonic = 'test walk nut penalty hip pave soap entry language right filter choice';
 
 const vcTemplate = {
     "@context": [
-        "https://www.w3.org/2018/credentials/v1",
-	"https://schema.affinidi.com/EmailV1-0.jsonld"
+      "https://www.w3.org/2018/credentials/v1",
+	{
+        "credentialSchema": {
+          "@id": "https://www.w3.org/2018/credentials#credentialSchema",
+          "@type": "@id"
+        },
+        "email": {
+          "@id": "schema-id:email",
+      	  "@type": "https://schema.org/Text"
+	  },
+	"studentName": {
+          "@id": "schema-id:studentName",
+      	  "@type": "https://schema.org/Text"
+        },
+	"courseName":  {
+          "@id": "schema-id:courseName",
+      	  "@type": "https://schema.org/Text"
+        },
+	"instituteName":  {
+          "@id": "schema-id:instituteName",
+      	  "@type": "https://schema.org/Text"
+        },
+	"instituteLogo":  {
+          "@id": "schema-id:instituteLogo",
+      	  "@type": "https://schema.org/Text"
+        },
+	"dateOfCompletion":  {
+          "@id": "schema-id:dateOfCompletion",
+      	  "@type": "https://schema.org/Text"
+        },
+	"scoreAchieved":  {
+          "@id": "schema-id:score",
+      	  "@type": "https://schema.org/Text"
+        }
+      }
     ],
     "type": ["VerifiableCredential"]
 };
@@ -47,7 +81,7 @@ async function signCredential(vc: any, key: any, verificationMethod: string) {
     return signedDoc;
 }
 
-async function generateVC() {
+async function generateVC(content: any, holderDid: string) {
     let vc = { ...vcTemplate };
 
     /* get the issuer-did and signing key */
@@ -74,14 +108,24 @@ async function generateVC() {
 
     vc.issuanceDate = new Date().toISOString();
     vc.holder = {
-	id: 'did:web:oid4vci.demo.cord.network:3zKcL2oAsvZZwFA5uPxtysk5jsai2TGx4AvrpJcBYmAwzGyN'
+	id: holderDid
     };
 
     /* This should be based on the 'hash' of the VC (CORD's identifier), and should get 'anchored' to CORD chain,  */
-    vc.id = "testing:1234";
+    /* TODO: this is where the actual content should be passed */
+    vc.id = 'cord:' + uuidv4();
 
     /* This needs to be based on the 'schema', and content for the schema */
-    vc.credentialSubject = { "email": "amar@dhiway.com"};
+    vc.credentialSubject = {
+        id: holderDid,
+   	email: content.email,
+	studentName: content.studentName,
+	courseName: content.courseName,
+	instituteName: content.instituteName,
+	instituteLogo: content.instituteLogo,
+	dateOfCompletion: content.dateOfCompletion,
+	scoreAchieved: content.scoreAchieved
+    };
 
     /* this should be the 'did:key:' generated earlier, but with mnemonic, so it is always same for same issuer */
     vc.issuer = did;
@@ -93,7 +137,17 @@ async function generateVC() {
 }
 
 async function main() {
-      await generateVC();
+    const content = {
+   	email: 'amar@dhiway.com',
+	studentName: 'Amar Tumballi',
+	courseName: 'Masters in Data Analytics (Dhiway) ',
+	instituteName: 'Hogwarts University',
+	instituteLogo: '', /* TODO: send URL */
+	dateOfCompletion: new Date().toISOString(), /* TODO: make this a old date */
+	scoreAchieved: '450/500'
+    };
+    const holderDid = 'did:web:oid4vci.demo.cord.network:3zKcL2oAsvZZwFA5uPxtysk5jsai2TGx4AvrpJcBYmAwzGyN';
+    await generateVC(content, holderDid);
 }
 
 main()
